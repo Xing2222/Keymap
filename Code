@@ -1,0 +1,368 @@
+import android.os.Bundle;
+
+import android.os.Handler;
+
+import android.util.DisplayMetrics;
+
+import android.view.KeyEvent;
+
+import android.view.MotionEvent;
+
+import android.view.View;
+
+import android.widget.Button;
+
+import android.widget.EditText;
+
+import android.widget.RadioGroup;
+
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.HashMap;
+
+import java.util.Map;
+
+public class KeyMappingActivity extends AppCompatActivity {
+
+    private Map<Integer, KeyMapping> keyMappingTable;
+
+    private EditText keyEditText;
+
+    private EditText xCoordinateEditText;
+
+    private EditText yCoordinateEditText;
+
+    private RadioGroup actionRadioGroup;
+
+    private Button mapButton;
+
+    private Handler handler = new Handler();
+
+    private boolean isTapping = false;
+
+    private static final long TAP_DURATION = 200; // Duration for tapping and holding (in milliseconds)
+
+    @Override
+
+    protected void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+
+        setContentView(R.layout.activity_key_mapping);
+
+        // Initialize the key mapping table
+
+        keyMappingTable = new HashMap<>();
+
+        // Retrieve the screen dimensions
+
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+
+        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+
+        final int screenWidth = displayMetrics.widthPixels;
+
+        final int screenHeight = displayMetrics.heightPixels;
+
+        // Initialize UI components
+
+        keyEditText = findViewById(R.id.key_edit_text);
+
+        xCoordinateEditText = findViewById(R.id.x_coordinate_edit_text);
+
+        yCoordinateEditText = findViewById(R.id.y_coordinate_edit_text);
+
+        actionRadioGroup = findViewById(R.id.action_radio_group);
+
+        mapButton = findViewById(R.id.map_button);
+
+        mapButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+
+            public void onClick(View v) {
+
+                mapKeyToAction();
+
+            }
+
+        });
+
+        // Set up a listener to capture key events
+
+        View rootView = findViewById(android.R.id.content);
+
+        rootView.setOnKeyListener(new View.OnKeyListener() {
+
+            @Override
+
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+
+                    KeyMapping keyMapping = keyMappingTable.get(keyCode);
+
+                    if (keyMapping != null) {
+
+                        if (keyMapping.getAction() == KeyAction.TAP) {
+
+                            performScreenTap(keyMapping.getCoordinates());
+
+                        } else if (keyMapping.getAction() == KeyAction.TAP_AND_HOLD) {
+
+                            startScreenTapAndHold(keyMapping.getCoordinates());
+
+                        }
+
+                        return true;
+
+                    }
+
+                }
+
+                return false;
+
+            }
+
+        });
+
+    }
+
+    // Perform a screen tap at the specified coordinates
+
+    private void performScreenTap(Coordinates coordinates) {
+
+        MotionEvent tapEvent = MotionEvent.obtain(
+
+                System.currentTimeMillis(),
+
+                System.currentTimeMillis(),
+
+                MotionEvent.ACTION_DOWN,
+
+                coordinates.getX(),
+
+                coordinates.getY(),
+
+                0
+
+        );
+
+        dispatchTouchEvent(tapEvent);
+
+        tapEvent.recycle();
+
+        // Display a toast message indicating the screen tap
+
+        Toast.makeText(this, "Screen tapped at (" + coordinates.getX() + ", " + coordinates.getY() + ")", Toast.LENGTH_SHORT).show();
+
+    }
+
+    // Start tapping and holding the screen at the specified coordinates
+
+    private void startScreenTapAndHold(final Coordinates coordinates) {
+
+        if (isTapping) {
+
+            return;
+
+        }
+
+        isTapping = true;
+
+        MotionEvent tapDownEvent = MotionEvent.obtain(
+
+                System.currentTimeMillis(),
+
+                System.currentTimeMillis(),
+
+                MotionEvent.ACTION_DOWN,
+
+                coordinates.getX(),
+
+                coordinates.getY(),
+
+                0
+
+        );
+
+        dispatchTouchEvent(tapDownEvent);
+
+        tapDownEvent.recycle();
+
+        handler.postDelayed(new Runnable() {
+
+            @Override
+
+            public void run() {
+
+                MotionEvent tapUpEvent = MotionEvent.obtain(
+
+                        System.currentTimeMillis(),
+
+                        System.currentTimeMillis(),
+
+                        MotionEvent.ACTION_UP,
+
+                        coordinates.getX(),
+
+                        coordinates.getY(),
+
+                        0
+
+                );
+
+                dispatchTouchEvent(tapUpEvent);
+
+                tapUpEvent.recycle();
+
+                isTapping = false;
+
+            }
+
+        }, TAP_DURATION);
+
+        // Display a toast message indicating the screen tap and hold
+
+        Toast.makeText(this, "Screen tapped and held at (" + coordinates.getX() + ", " + coordinates.getY() + ")", Toast.LENGTH_SHORT).show();
+
+    }
+
+    // Map the specified key code to the user-defined action and screen tap coordinates
+
+    private void mapKeyToAction() {
+
+        String keyText = keyEditText.getText().toString().trim();
+
+        String xCoordinateText = xCoordinateEditText.getText().toString().trim();
+
+        String yCoordinateText = yCoordinateEditText.getText().toString().trim();
+
+        int selectedActionId = actionRadioGroup.getCheckedRadioButtonId();
+
+        if (keyText.isEmpty() || xCoordinateText.isEmpty() || yCoordinateText.isEmpty() || selectedActionId == -1) {
+
+            Toast.makeText(this, "Please enter all values", Toast.LENGTH_SHORT).show();
+
+            return;
+
+        }
+
+        int keyCode = KeyEvent.keyCodeFromString(keyText);
+
+        if (keyCode == KeyEvent.KEYCODE_UNKNOWN) {
+
+            Toast.makeText(this, "Invalid key code", Toast.LENGTH_SHORT).show();
+
+            return;
+
+        }
+
+        int xCoordinate = Integer.parseInt(xCoordinateText);
+
+        int yCoordinate = Integer.parseInt(yCoordinateText);
+
+        if (xCoordinate < 0 || xCoordinate > screenWidth || yCoordinate < 0 || yCoordinate > screenHeight) {
+
+            Toast.makeText(this, "Invalid coordinates", Toast.LENGTH_SHORT).show();
+
+            return;
+
+        }
+
+        KeyAction action;
+
+        if (selectedActionId == R.id.tap_radio_button) {
+
+            action = KeyAction.TAP;
+
+        } else {
+
+            action = KeyAction.TAP_AND_HOLD;
+
+        }
+
+        Coordinates coordinates = new Coordinates(xCoordinate, yCoordinate);
+
+        KeyMapping keyMapping = new KeyMapping(action, coordinates);
+
+        keyMappingTable.put(keyCode, keyMapping);
+
+        Toast.makeText(this, "Key mapped successfully", Toast.LENGTH_SHORT).show();
+
+    }
+
+    // Helper class to hold coordinates
+
+    private static class Coordinates {
+
+        private final int x;
+
+        private final int y;
+
+        public Coordinates(int x, int y) {
+
+            this.x = x;
+
+            this.y = y;
+
+        }
+
+        public int getX() {
+
+            return x;
+
+        }
+
+        public int getY() {
+
+            return y;
+
+        }
+
+    }
+
+    // Enum to represent the key action
+
+    private enum KeyAction {
+
+        TAP,
+
+        TAP_AND_HOLD
+
+    }
+
+    // Class to hold the key mapping information
+
+    private static class KeyMapping {
+
+        private final KeyAction action;
+
+        private final Coordinates coordinates;
+
+        public KeyMapping(KeyAction action, Coordinates coordinates) {
+
+            this.action = action;
+
+            this.coordinates = coordinates;
+
+        }
+
+        public KeyAction getAction() {
+
+            return action;
+
+        }
+
+        public Coordinates getCoordinates() {
+
+            return coordinates;
+
+        }
+
+    }
+
+}
+
